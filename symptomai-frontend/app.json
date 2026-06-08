@@ -23,7 +23,14 @@
     },
     "plugins": [
       "expo-asset",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "SymptomAI perlu akses galeri untuk memindai kemasan obat.",
+          "cameraPermission": "SymptomAI perlu akses kamera untuk mengambil foto kemasan obat."
+        }
+      ]
     ]
   }
 }

@@ -4,3 +4,13 @@ fastapi
 uvicorn
 joblib
 requests
+# Medicine scan dependencies
+Pillow
+pytesseract
+python-multipart
+thefuzz[speedup]
+# Barcode / QR scan (optional but recommended)
+pyzbar
+# Better image preprocessing for OCR (optional but recommended)
+opencv-python-headless
+numpy

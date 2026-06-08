@@ -1,6 +1,18 @@
 # Gunakan image Python resmi yang ringan
 FROM python:3.12-slim
 
+# Instal Tesseract OCR + bahasa Indonesia & Inggris
+# Instal libzbar0 untuk scan barcode/QR (pyzbar)
+# Instal libGL untuk opencv
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    tesseract-ocr \
+    tesseract-ocr-ind \
+    tesseract-ocr-eng \
+    libzbar0 \
+    libgl1 \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
 # Atur direktori kerja di dalam kontainer
 WORKDIR /app
 
