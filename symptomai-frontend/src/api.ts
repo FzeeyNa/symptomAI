@@ -1,6 +1,6 @@
 import { AnalysisResult, ScanResult, MedicineSearchResult } from "./types";
 
-const BASE_URL = "https://symptomai-api-fazry12345.azurewebsites.net";
+const BASE_URL = "https://symptomai-api-v2.azurewebsites.net";
 
 export async function predictDisease(
   symptoms: Record<string, boolean>,

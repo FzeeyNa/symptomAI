@@ -1,7 +1,6 @@
 import io
 import re
 from typing import Dict, List, Optional
-
 import joblib
 import pandas as pd
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
@@ -12,7 +11,6 @@ app = FastAPI(
     description="API untuk prediksi penyakit dan informasi/scan obat menggunakan Machine Learning",
 )
 
-# ─── Load Disease Prediction Model ──────────────────────────────────────────
 try:
     data = joblib.load("model_symptomai.pkl")
     model = data["model"]
@@ -28,7 +26,6 @@ except Exception as e:
     features = []
     print(f"Error loading model: {e}")
 
-# ─── Load Medicine Database ──────────────────────────────────────────────────
 try:
     medicine_df = pd.read_csv("dataset_obat.csv")
     print(f"Database obat dimuat: {len(medicine_df)} obat.")
@@ -41,13 +38,9 @@ except Exception as e:
     medicine_df = None
     print(f"Error loading medicine database: {e}")
 
-
-# ─── Request / Response Models ───────────────────────────────────────────────
 class SymptomRequest(BaseModel):
     symptoms: Dict[str, bool]
 
-
-# ─── Image Preprocessing ─────────────────────────────────────────────────────
 def _preprocess_images(image_bytes: bytes) -> list:
     """
     Return list of preprocessed PIL Image objects for OCR attempts.
@@ -59,18 +52,15 @@ def _preprocess_images(image_bytes: bytes) -> list:
     images = []
     base_img = Image.open(io.BytesIO(image_bytes))
 
-    # Strategy 1: Grayscale + autocontrast + sharpen (baseline)
     img1 = base_img.convert("L")
     img1 = ImageOps.autocontrast(img1)
     img1 = img1.filter(ImageFilter.SHARPEN)
     images.append(img1)
 
-    # Strategy 2: Histogram equalisation (helps for low-contrast packaging)
     img2 = base_img.convert("L")
     img2 = ImageOps.equalize(img2)
     images.append(img2)
 
-    # Strategy 3: Upscale small images to at least 1200 px on the longest side
     w, h = base_img.size
     if max(w, h) < 1200:
         scale = 1200 / max(w, h)
@@ -147,7 +137,6 @@ def _extract_text_ocr(image_bytes: bytes) -> str:
     return best_text
 
 
-# ─── Barcode / QR Scan ────────────────────────────────────────────────────────
 def _scan_barcode_from_image(image_bytes: bytes) -> list:
     """
     Decode barcodes and QR codes from the image using pyzbar.
