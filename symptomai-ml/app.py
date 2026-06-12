@@ -1,15 +1,25 @@
 import io
 import re
 from typing import Dict, List, Optional
+
 import joblib
 import pandas as pd
-from fastapi import FastAPI, File, HTTPException, Query, UploadFile
+from db import Base, engine, get_db
+from db_models import Medicine
+from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel
+from sqlalchemy import func, or_
+from sqlalchemy.orm import Session
 
 app = FastAPI(
     title="SymptomAI ML API",
     description="API untuk prediksi penyakit dan informasi/scan obat menggunakan Machine Learning",
 )
+
+try:
+    Base.metadata.create_all(bind=engine)
+except Exception as e:
+    print(f"Warning: gagal inisialisasi tabel database: {e}")
 
 try:
     data = joblib.load("model_symptomai.pkl")
@@ -38,8 +48,50 @@ except Exception as e:
     medicine_df = None
     print(f"Error loading medicine database: {e}")
 
+
 class SymptomRequest(BaseModel):
     symptoms: Dict[str, bool]
+
+
+def _medicine_to_dict(row: Medicine) -> dict:
+    return {
+        "id": row.id,
+        "nama_obat": row.nama_obat,
+        "nama_generik": row.nama_generik,
+        "kategori": row.kategori,
+        "golongan": row.golongan,
+        "bentuk_sediaan": row.bentuk_sediaan,
+        "kandungan_aktif": row.kandungan_aktif,
+        "indikasi": row.indikasi,
+        "kontraindikasi": row.kontraindikasi,
+        "dosis": row.dosis,
+        "efek_samping": row.efek_samping,
+        "peringatan": row.peringatan,
+    }
+
+
+def _medicine_df_from_db(db: Session) -> pd.DataFrame:
+    rows = db.query(Medicine).all()
+    records = [_medicine_to_dict(r) for r in rows]
+    if not records:
+        return pd.DataFrame(
+            columns=[
+                "id",
+                "nama_obat",
+                "nama_generik",
+                "kategori",
+                "golongan",
+                "bentuk_sediaan",
+                "kandungan_aktif",
+                "indikasi",
+                "kontraindikasi",
+                "dosis",
+                "efek_samping",
+                "peringatan",
+            ]
+        )
+    return pd.DataFrame(records)
+
 
 def _preprocess_images(image_bytes: bytes) -> list:
     """
@@ -226,26 +278,30 @@ def _detect_bpom_number(text: str) -> Optional[str]:
 
 
 # ─── Fuzzy Search ─────────────────────────────────────────────────────────────
-def _fuzzy_search(query: str, top_n: int = 5) -> list:
+def _fuzzy_search(
+    query: str,
+    top_n: int = 5,
+    medicine_data: Optional[pd.DataFrame] = None,
+) -> list:
     """Fuzzy-match a single query against medicine names and generic names."""
-    if medicine_df is None:
+    df = medicine_data if medicine_data is not None else medicine_df
+    if df is None or df.empty:
         return []
 
     try:
         from thefuzz import process
     except ImportError:
-        # Fallback: simple substring match
         q = query.lower()
-        mask = medicine_df["nama_obat"].str.lower().str.contains(
-            q, na=False
-        ) | medicine_df["nama_generik"].str.lower().str.contains(q, na=False)
-        rows = medicine_df[mask].head(top_n)
+        mask = df["nama_obat"].str.lower().str.contains(q, na=False) | df[
+            "nama_generik"
+        ].str.lower().str.contains(q, na=False)
+        rows = df[mask].head(top_n)
         return [
             {**row.to_dict(), "similarity_score": None} for _, row in rows.iterrows()
         ]
 
     name_to_id: Dict[str, int] = {}
-    for _, row in medicine_df.iterrows():
+    for _, row in df.iterrows():
         name_to_id[row["nama_obat"]] = int(row["id"])
         name_to_id[row["nama_generik"]] = int(row["id"])
 
@@ -257,35 +313,37 @@ def _fuzzy_search(query: str, top_n: int = 5) -> list:
         row_id = name_to_id[match_name]
         if row_id not in seen_ids and len(results) < top_n:
             seen_ids.add(row_id)
-            row = medicine_df[medicine_df["id"] == row_id].iloc[0]
+            row = df[df["id"] == row_id].iloc[0]
             results.append({**row.to_dict(), "similarity_score": score})
 
     return results
 
 
-def _fuzzy_search_multi(candidates: List[str], top_n: int = 5) -> list:
+def _fuzzy_search_multi(
+    candidates: List[str],
+    top_n: int = 5,
+    medicine_data: Optional[pd.DataFrame] = None,
+) -> list:
     """
     Fuzzy-match multiple candidate strings against the medicine database.
     Results are merged and ranked by the best similarity score found across
-    all candidates.  Only matches with a score >= 60 are included.
-    Each result includes a ``matched_by`` field showing which candidate
-    triggered the match.
+    all candidates. Only matches with a score >= 60 are included.
     """
-    if not candidates or medicine_df is None:
+    df = medicine_data if medicine_data is not None else medicine_df
+    if not candidates or df is None or df.empty:
         return []
 
     try:
         from thefuzz import process
     except ImportError:
-        # Graceful degradation: substring search on all candidates
         seen_ids: set = set()
         results = []
         for cand in candidates:
             q = cand.lower()
-            mask = medicine_df["nama_obat"].str.lower().str.contains(
-                q, na=False
-            ) | medicine_df["nama_generik"].str.lower().str.contains(q, na=False)
-            for _, row in medicine_df[mask].iterrows():
+            mask = df["nama_obat"].str.lower().str.contains(q, na=False) | df[
+                "nama_generik"
+            ].str.lower().str.contains(q, na=False)
+            for _, row in df[mask].iterrows():
                 rid = int(row["id"])
                 if rid not in seen_ids:
                     seen_ids.add(rid)
@@ -297,13 +355,11 @@ def _fuzzy_search_multi(candidates: List[str], top_n: int = 5) -> list:
         return results
 
     name_to_id: Dict[str, int] = {}
-    for _, row in medicine_df.iterrows():
+    for _, row in df.iterrows():
         name_to_id[row["nama_obat"]] = int(row["id"])
         name_to_id[row["nama_generik"]] = int(row["id"])
 
     name_list = list(name_to_id.keys())
-
-    # Track best (score, matched_by) per medicine id
     best: Dict[int, tuple] = {}
 
     for candidate in candidates:
@@ -320,7 +376,7 @@ def _fuzzy_search_multi(candidates: List[str], top_n: int = 5) -> list:
 
     results = []
     for row_id, (score, matched_by) in sorted_ids:
-        row = medicine_df[medicine_df["id"] == row_id]
+        row = df[df["id"] == row_id]
         if not row.empty:
             results.append(
                 {
@@ -359,6 +415,143 @@ def get_all_symptoms():
     return {"symptoms": features}
 
 
+# ─── Red Flag Detection ───────────────────────────────────────────────────────
+# Aturan kombinasi gejala berbahaya → (pesan, level)
+# level: "darurat" = butuh penanganan medis segera
+#        "waspada" = disarankan konsultasi dokter
+RED_FLAG_RULES: List[tuple] = [
+    # ── Darurat ──────────────────────────────────────────────────────────────
+    (
+        {"sesak_napas", "nyeri_dada"},
+        "Risiko serangan jantung atau gangguan napas serius",
+        "darurat",
+    ),
+    (
+        {"sesak_napas", "dada_sesak"},
+        "Risiko gangguan napas berat",
+        "darurat",
+    ),
+    (
+        {"kejang", "penurunan_kesadaran"},
+        "Tanda neurologis serius, butuh penanganan segera",
+        "darurat",
+    ),
+    (
+        {"muntah_darah"},
+        "Perdarahan saluran cerna, butuh penanganan segera",
+        "darurat",
+    ),
+    (
+        {"nyeri_dada", "berkeringat_dingin", "mual"},
+        "Tanda serangan jantung akut",
+        "darurat",
+    ),
+    (
+        {"demam_tinggi", "kaku_kuduk", "sakit_kepala_hebat"},
+        "Kemungkinan meningitis, butuh penanganan segera",
+        "darurat",
+    ),
+    (
+        {"sesak_napas", "bibir_biru"},
+        "Sianosis — kadar oksigen sangat rendah",
+        "darurat",
+    ),
+    (
+        {"penurunan_kesadaran"},
+        "Penurunan kesadaran mendadak memerlukan evaluasi segera",
+        "darurat",
+    ),
+    # ── Waspada ──────────────────────────────────────────────────────────────
+    (
+        {"demam_tinggi", "lemas", "muntah"},
+        "Perlu evaluasi medis segera — risiko dehidrasi atau infeksi serius",
+        "waspada",
+    ),
+    (
+        {"demam_tinggi", "ruam_kulit"},
+        "Kemungkinan infeksi virus disertai ruam, perlu pemeriksaan dokter",
+        "waspada",
+    ),
+    (
+        {"sakit_kepala_hebat", "demam_tinggi"},
+        "Risiko infeksi SSP, disarankan konsultasi dokter",
+        "waspada",
+    ),
+    (
+        {"nyeri_perut_hebat", "demam_tinggi"},
+        "Risiko appendisitis atau infeksi abdomen, perlu evaluasi dokter",
+        "waspada",
+    ),
+    (
+        {"batuk_darah"},
+        "Batuk berdarah perlu pemeriksaan lebih lanjut",
+        "waspada",
+    ),
+    (
+        {"sesak_napas", "demam_tinggi"},
+        "Kemungkinan pneumonia, disarankan segera ke dokter",
+        "waspada",
+    ),
+    (
+        {"nyeri_dada", "sesak_napas"},
+        "Gejala kardiopulmoner, perlu evaluasi dokter",
+        "waspada",
+    ),
+    (
+        {"lemas", "pucat", "pusing"},
+        "Kemungkinan anemia atau penurunan tekanan darah",
+        "waspada",
+    ),
+]
+
+RECOMMENDATIONS = {
+    "darurat": (
+        "Segera hubungi layanan darurat (119) atau pergi ke IGD rumah sakit terdekat. "
+        "Jangan mengemudi sendiri."
+    ),
+    "waspada": (
+        "Disarankan segera berkonsultasi dengan dokter atau klinik terdekat dalam 24 jam. "
+        "Pantau gejala secara berkala."
+    ),
+    "normal": (
+        "Istirahat yang cukup dan minum air putih yang banyak. "
+        "Segera ke dokter jika gejala memburuk atau tidak membaik dalam 3 hari."
+    ),
+}
+
+
+def detect_red_flags(symptoms: Dict[str, bool]) -> tuple:
+    """
+    Mendeteksi kombinasi gejala berbahaya (red flags) berdasarkan rule-based system.
+
+    Args:
+        symptoms: Dictionary gejala → bool (True = gejala dirasakan)
+
+    Returns:
+        Tuple (red_flags: List[str], urgency_level: str, recommendation: str)
+        urgency_level: "darurat" | "waspada" | "normal"
+    """
+    # Ambil set gejala yang aktif (True), normalisasi huruf kecil
+    active_symptoms: set = {
+        k.lower().replace(" ", "_") for k, v in symptoms.items() if v
+    }
+
+    triggered_flags: List[str] = []
+    highest_level = "normal"  # darurat > waspada > normal
+
+    level_priority = {"normal": 0, "waspada": 1, "darurat": 2}
+
+    for rule_symptoms, message, level in RED_FLAG_RULES:
+        # Cek apakah semua gejala dalam rule terpenuhi
+        if rule_symptoms.issubset(active_symptoms):
+            triggered_flags.append(message)
+            if level_priority[level] > level_priority[highest_level]:
+                highest_level = level
+
+    recommendation = RECOMMENDATIONS[highest_level]
+    return triggered_flags, highest_level, recommendation
+
+
 @app.post("/predict")
 def predict_disease(request: SymptomRequest):
     if not model:
@@ -373,9 +566,29 @@ def predict_disease(request: SymptomRequest):
     probabilities = model.predict_proba([input_data])[0]
     confidence = max(probabilities) * 100
 
+    # Top 3 predictions beserta confidence-nya
+    classes = model.classes_
+    top_indices = sorted(
+        range(len(probabilities)), key=lambda i: probabilities[i], reverse=True
+    )[:3]
+    top_predictions = [
+        {"name": classes[i], "confidence": f"{probabilities[i] * 100:.2f}%"}
+        for i in top_indices
+    ]
+
+    # Red flag detection
+    red_flags, urgency_level, recommendation = detect_red_flags(request.symptoms)
+    # Gejala yang diinput user (bernilai True)
+    key_symptoms_detected = [k for k, v in request.symptoms.items() if v]
+
     return {
         "prediction": prediction[0],
         "confidence": f"{confidence:.2f}%",
+        "top_predictions": top_predictions,
+        "red_flags": red_flags,
+        "urgency_level": urgency_level,
+        "recommendation": recommendation,
+        "key_symptoms_detected": key_symptoms_detected,
     }
 
 
@@ -384,24 +597,28 @@ def predict_disease(request: SymptomRequest):
 def get_medicines(
     skip: int = Query(0, ge=0, description="Mulai dari indeks ke-n"),
     limit: int = Query(20, ge=1, le=100, description="Jumlah data (maks 100)"),
+    db: Session = Depends(get_db),
 ):
-    """Mengembalikan daftar semua obat secara paginasi."""
-    if medicine_df is None:
-        raise HTTPException(status_code=500, detail="Database obat tidak tersedia.")
-
-    total = len(medicine_df)
-    records = medicine_df.iloc[skip : skip + limit].to_dict(orient="records")
+    """Mengembalikan daftar semua obat secara paginasi (PostgreSQL)."""
+    total = db.query(func.count(Medicine.id)).scalar() or 0
+    rows = db.query(Medicine).offset(skip).limit(limit).all()
+    records = [_medicine_to_dict(row) for row in rows]
     return {"total": total, "skip": skip, "limit": limit, "data": records}
 
 
 @app.get("/medicines/categories")
-def get_medicine_categories():
-    """Mengembalikan daftar kategori obat beserta jumlahnya."""
-    if medicine_df is None:
-        raise HTTPException(status_code=500, detail="Database obat tidak tersedia.")
-
-    counts = medicine_df["kategori"].value_counts().to_dict()
-    return {"categories": [{"kategori": k, "jumlah": v} for k, v in counts.items()]}
+def get_medicine_categories(db: Session = Depends(get_db)):
+    """Mengembalikan daftar kategori obat beserta jumlahnya (PostgreSQL)."""
+    rows = (
+        db.query(Medicine.kategori, func.count(Medicine.id))
+        .group_by(Medicine.kategori)
+        .all()
+    )
+    return {
+        "categories": [
+            {"kategori": kategori, "jumlah": jumlah} for kategori, jumlah in rows
+        ]
+    }
 
 
 @app.get("/medicines/search")
@@ -411,30 +628,32 @@ def search_medicines(
     golongan: Optional[str] = Query(
         None, description="Filter berdasarkan golongan (e.g. 'Obat Bebas')"
     ),
+    db: Session = Depends(get_db),
 ):
     """
     Cari obat berdasarkan nama, nama generik, atau kandungan aktif.
     Mendukung pencarian parsial (substring).
     """
-    if medicine_df is None:
-        raise HTTPException(status_code=500, detail="Database obat tidak tersedia.")
-
-    mask = (
-        medicine_df["nama_obat"].str.contains(q, case=False, na=False)
-        | medicine_df["nama_generik"].str.contains(q, case=False, na=False)
-        | medicine_df["kandungan_aktif"].str.contains(q, case=False, na=False)
+    query = db.query(Medicine).filter(
+        or_(
+            Medicine.nama_obat.ilike(f"%{q}%"),
+            Medicine.nama_generik.ilike(f"%{q}%"),
+            Medicine.kandungan_aktif.ilike(f"%{q}%"),
+        )
     )
-    result = medicine_df[mask].copy()
 
     if kategori:
-        result = result[result["kategori"].str.lower() == kategori.lower()]
+        query = query.filter(func.lower(Medicine.kategori) == kategori.lower())
 
     if golongan:
-        result = result[
-            result["golongan"].str.lower().str.contains(golongan.lower(), na=False)
-        ]
+        query = query.filter(Medicine.golongan.ilike(f"%{golongan}%"))
 
-    return {"total": len(result), "query": q, "data": result.to_dict(orient="records")}
+    rows = query.all()
+    return {
+        "total": len(rows),
+        "query": q,
+        "data": [_medicine_to_dict(row) for row in rows],
+    }
 
 
 @app.post("/medicines/scan")
@@ -449,6 +668,7 @@ async def scan_medicine(
         True,
         description="Aktifkan pemindaian barcode/QR pada gambar (memerlukan pyzbar)",
     ),
+    db: Session = Depends(get_db),
 ):
     """
     Scan gambar kemasan obat dan cocokkan dengan database obat.
@@ -476,8 +696,11 @@ async def scan_medicine(
     **Opsional:** `pyzbar` + `libzbar0` untuk barcode; `opencv-python-headless`
     untuk preprocessing lebih akurat.
     """
-    if medicine_df is None:
-        raise HTTPException(status_code=500, detail="Database obat tidak tersedia.")
+    medicine_data = _medicine_df_from_db(db)
+    if medicine_data.empty:
+        raise HTTPException(
+            status_code=500, detail="Database obat tidak tersedia / kosong."
+        )
 
     content_type = file.content_type or ""
     if not content_type.startswith("image/"):
@@ -534,7 +757,11 @@ async def scan_medicine(
     response["candidates_extracted"] = candidates[:20]
 
     if candidates:
-        response["matches"] = _fuzzy_search_multi(candidates, top_n=top_n)
+        response["matches"] = _fuzzy_search_multi(
+            candidates,
+            top_n=top_n,
+            medicine_data=medicine_data,
+        )
 
     if not response["matches"]:
         response["pesan"] = (
@@ -546,16 +773,13 @@ async def scan_medicine(
 
 
 @app.get("/medicines/{medicine_id}")
-def get_medicine_by_id(medicine_id: int):
-    """Mengembalikan detail lengkap sebuah obat berdasarkan ID."""
-    if medicine_df is None:
-        raise HTTPException(status_code=500, detail="Database obat tidak tersedia.")
-
-    row = medicine_df[medicine_df["id"] == medicine_id]
-    if row.empty:
+def get_medicine_by_id(medicine_id: int, db: Session = Depends(get_db)):
+    """Mengembalikan detail lengkap sebuah obat berdasarkan ID (PostgreSQL)."""
+    row = db.query(Medicine).filter(Medicine.id == medicine_id).first()
+    if row is None:
         raise HTTPException(
             status_code=404,
             detail=f"Obat dengan ID {medicine_id} tidak ditemukan.",
         )
 
-    return row.iloc[0].to_dict()
+    return _medicine_to_dict(row)

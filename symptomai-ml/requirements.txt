@@ -14,3 +14,6 @@ pyzbar
 # Better image preprocessing for OCR (optional but recommended)
 opencv-python-headless
 numpy
+SQLAlchemy>=2.0
+psycopg[binary]>=3.1
+python-dotenv>=1.0

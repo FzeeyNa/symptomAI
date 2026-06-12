@@ -83,8 +83,6 @@ export default function MedicineScanScreen() {
     }
   };
 
-  // ── Handlers ─────────────────────────────────────────────────────────────────
-
   const handleScan = async () => {
     if (!imageUri) return;
     setScanning(true);
@@ -136,8 +134,6 @@ export default function MedicineScanScreen() {
     setError(null);
   };
 
-  // ── Render ───────────────────────────────────────────────────────────────────
-
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar style="light" />
@@ -166,7 +162,7 @@ export default function MedicineScanScreen() {
                 mode === "scan" && styles.modeBtnTextActive,
               ]}
             >
-              📷 Scan Gambar
+              Scan Gambar
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -180,7 +176,7 @@ export default function MedicineScanScreen() {
                 mode === "search" && styles.modeBtnTextActive,
               ]}
             >
-              🔍 Cari Nama
+              Cari Nama
             </Text>
           </TouchableOpacity>
         </View>
@@ -216,7 +212,7 @@ export default function MedicineScanScreen() {
                     onPress={pickFromCamera}
                     activeOpacity={0.8}
                   >
-                    <Text style={styles.pickBtnPrimaryText}>📷 Kamera</Text>
+                    <Text style={styles.pickBtnPrimaryText}>Kamera</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.pickBtnSecondary}
@@ -272,7 +268,7 @@ export default function MedicineScanScreen() {
                     {scanning ? (
                       <ActivityIndicator color="#ffffff" />
                     ) : (
-                      <Text style={styles.scanBtnText}>🔬 Mulai Scan</Text>
+                      <Text style={styles.scanBtnText}>Mulai Scan</Text>
                     )}
                   </TouchableOpacity>
                 )}
@@ -295,7 +291,7 @@ export default function MedicineScanScreen() {
                     {scanResult.barcodes.length > 0 && (
                       <View style={[styles.infoCard, styles.infoCardGreen]}>
                         <Text style={styles.infoCardTitle}>
-                          📊 Barcode Terdeteksi
+                          Barcode Terdeteksi
                         </Text>
                         {scanResult.barcodes.map((bc, i) => (
                           <Text key={i} style={styles.infoCardText}>
@@ -309,7 +305,7 @@ export default function MedicineScanScreen() {
                     {scanResult.bpom_number ? (
                       <View style={[styles.infoCard, styles.infoCardBlue]}>
                         <Text style={styles.infoCardTitle}>
-                          🏥 Nomor BPOM Terdeteksi
+                          Nomor BPOM Terdeteksi
                         </Text>
                         <Text style={styles.bpomText}>
                           {scanResult.bpom_number}
