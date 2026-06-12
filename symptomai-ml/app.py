@@ -5,7 +5,7 @@ from typing import Dict, List, Optional
 import joblib
 import pandas as pd
 from db import Base, engine, get_db
-from db_models import Medicine
+from db_model import Medicine, DrugInteraction
 from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import func, or_
@@ -52,6 +52,8 @@ except Exception as e:
 class SymptomRequest(BaseModel):
     symptoms: Dict[str, bool]
 
+class InteractionRequest(BaseModel):
+    medicine_ids: List[int]
 
 def _medicine_to_dict(row: Medicine) -> dict:
     return {
@@ -783,3 +785,74 @@ def get_medicine_by_id(medicine_id: int, db: Session = Depends(get_db)):
         )
 
     return _medicine_to_dict(row)
+
+@app.post("/medicines/interactions")
+def check_interactions(
+    request: InteractionRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Memeriksa interaksi antar obat berdasarkan daftar ID obat yang diberikan.
+    Menghasilkan semua pasangan kombinasi yang memiliki interaksi tercatat.
+    """
+    if len(request.medicine_ids) < 2:
+        raise HTTPException(
+            status_code=422,
+            detail="Masukkan minimal 2 ID obat untuk mengecek interaksi.",
+        )
+
+    # Ambil nama obat dari database berdasarkan ID
+    medicines = (
+        db.query(Medicine)
+        .filter(Medicine.id.in_(request.medicine_ids))
+        .all()
+    )
+
+    if len(medicines) < 2:
+        raise HTTPException(
+            status_code=404,
+            detail="Obat tidak ditemukan. Pastikan ID yang diberikan valid.",
+        )
+
+    # Buat mapping id -> nama_obat
+    id_to_name = {m.id: m.nama_obat for m in medicines}
+    medicine_names = list(id_to_name.values())
+
+    # Cari semua kombinasi pasangan obat
+    from itertools import combinations
+
+    pairs = list(combinations(medicine_names, 2))
+
+    # Cek setiap pasangan di tabel drug_interactions
+    found_interactions = []
+    for name_a, name_b in pairs:
+        interaction = (
+            db.query(DrugInteraction)
+            .filter(
+                or_(
+                    (
+                        func.lower(DrugInteraction.obat_a) == name_a.lower(),
+                        func.lower(DrugInteraction.obat_b) == name_b.lower(),
+                    ),
+                    (
+                        func.lower(DrugInteraction.obat_a) == name_b.lower(),
+                        func.lower(DrugInteraction.obat_b) == name_a.lower(),
+                    ),
+                )
+            )
+            .first()
+        )
+        if interaction:
+            found_interactions.append(
+                {
+                    "pair": [name_a, name_b],
+                    "severity": interaction.severity,
+                    "efek": interaction.efek,
+                    "saran": interaction.saran,
+                }
+            )
+
+    return {
+        "total_checked": len(pairs),
+        "interactions": found_interactions,
+    }

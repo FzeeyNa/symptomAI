@@ -1,0 +1,11 @@
+obat_a,obat_b,severity,efek,saran
+Ibuprofen,Aspirin,medium,"Meningkatkan risiko perdarahan saluran cerna","Hindari penggunaan bersamaan. Konsultasikan dengan dokter."
+Ibuprofen,Warfarin,high,"Meningkatkan efek antikoagulan, risiko perdarahan serius","Jangan gunakan bersamaan tanpa pengawasan dokter."
+Aspirin,Warfarin,high,"Risiko perdarahan meningkat signifikan","Gunakan hanya jika direkomendasikan dokter dengan pemantauan ketat."
+Paracetamol,Alkohol,high,"Kerusakan hati serius","Hindari konsumsi alkohol saat menggunakan paracetamol."
+Amoxicillin,Methotrexate,high,"Meningkatkan toksisitas methotrexate","Hindari kombinasi ini, konsultasikan dokter segera."
+Ciprofloxacin,Antasida,low,"Mengurangi penyerapan ciprofloxacin","Berikan jarak konsumsi minimal 2 jam."
+Metformin,Alkohol,medium,"Risiko asidosis laktat meningkat","Hindari konsumsi alkohol selama terapi metformin."
+Simvastatin,Eritromisin,high,"Meningkatkan risiko miopati dan rhabdomyolysis","Hindari penggunaan bersamaan."
+Amlodipine,Simvastatin,medium,"Meningkatkan kadar simvastatin dalam darah","Batasi dosis simvastatin maksimal 20mg."
+Omeprazole,Clopidogrel,medium,"Mengurangi efektivitas clopidogrel","Gunakan pengganti PPI yang tidak berinteraksi."

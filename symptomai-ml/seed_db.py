@@ -1,6 +1,6 @@
 import pandas as pd
 from db import SessionLocal, engine
-from db_models import Base, Medicine
+from db_model import Base, Medicine
 
 
 def main() -> None:

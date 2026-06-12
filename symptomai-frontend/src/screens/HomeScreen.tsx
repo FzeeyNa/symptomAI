@@ -7,17 +7,22 @@ import {
   SafeAreaView,
   ActivityIndicator,
   StyleSheet,
+  Alert,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { SYMPTOMS_LIST, formatSymptomName, AnalysisResult } from '../types';
+import { SYMPTOMS_LIST, formatSymptomName, AnalysisResult, PredictionHistory } from '../types';
 import { predictDisease } from '../api';
 import ResultCard from '../components/ResultCard';
+import HistoryScreen from './HistoryScreen';
 
 export default function HomeScreen() {
   const [selectedSymptoms, setSelectedSymptoms] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [history, setHistory] = useState<PredictionHistory[]>([]);
+  const [activeTab, setActiveTab] = useState<'home' | 'history'>('home');
+  const [historyDetail, setHistoryDetail] = useState<PredictionHistory | null>(null);
 
   const toggleSymptom = (symptom: string) => {
     const newSelected = new Set(selectedSymptoms);
@@ -47,6 +52,22 @@ export default function HomeScreen() {
     try {
       const data = await predictDisease(symptomRecord);
       setResult(data);
+
+      // Simpan ke history
+      const now = new Date();
+      const historyEntry: PredictionHistory = {
+        id: `${Date.now()}`,
+        date: now.toLocaleDateString('id-ID', {
+          day: 'numeric', month: 'long', year: 'numeric',
+          hour: '2-digit', minute: '2-digit',
+        }),
+        prediction: data.prediction,
+        confidence: data.confidence,
+        urgency_level: data.urgency_level,
+        symptoms: Array.from(selectedSymptoms),
+        result: data,
+      };
+      setHistory(prev => [historyEntry, ...prev]);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Terjadi kesalahan saat memprediksi');
     } finally {
@@ -59,6 +80,52 @@ export default function HomeScreen() {
     setResult(null);
     setError(null);
   };
+
+  const handleSelectHistory = (item: PredictionHistory) => {
+    setHistoryDetail(item);
+    setActiveTab('home');
+    setResult(item.result);
+  };
+
+  const handleClearHistory = () => {
+    Alert.alert(
+      'Hapus Semua Riwayat',
+      'Apakah kamu yakin ingin menghapus semua riwayat analisis?',
+      [
+        { text: 'Batal', style: 'cancel' },
+        { text: 'Hapus', style: 'destructive', onPress: () => setHistory([]) },
+      ]
+    );
+  };
+
+  // Render History Tab
+  if (activeTab === 'history') {
+    return (
+      <View style={{ flex: 1 }}>
+        <HistoryScreen
+          history={history}
+          onSelectHistory={handleSelectHistory}
+          onClearHistory={handleClearHistory}
+        />
+        {/* Bottom Tab Bar */}
+        <View style={styles.tabBar}>
+          <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('home')}>
+            <Text style={styles.tabIcon}>🏠</Text>
+            <Text style={styles.tabLabel}>Analisis</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.tabItem, styles.tabItemActive]}>
+            <Text style={styles.tabIcon}>📋</Text>
+            <Text style={[styles.tabLabel, styles.tabLabelActive]}>Riwayat</Text>
+            {history.length > 0 && (
+              <View style={styles.tabBadge}>
+                <Text style={styles.tabBadgeText}>{history.length}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -124,7 +191,7 @@ export default function HomeScreen() {
         ) : (
           <View style={styles.resultContainer}>
             <ResultCard result={result} />
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.backBtn}
               onPress={resetForm}
             >
@@ -155,6 +222,26 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
       )}
+
+      {/* Bottom Tab Bar */}
+      <View style={[styles.tabBar, !result && { paddingBottom: 0 }]}>
+        <TouchableOpacity style={[styles.tabItem, styles.tabItemActive]}>
+          <Text style={styles.tabIcon}>🏠</Text>
+          <Text style={[styles.tabLabel, styles.tabLabelActive]}>Analisis</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.tabItem}
+          onPress={() => setActiveTab('history')}
+        >
+          <Text style={styles.tabIcon}>📋</Text>
+          <Text style={styles.tabLabel}>Riwayat</Text>
+          {history.length > 0 && (
+            <View style={styles.tabBadge}>
+              <Text style={styles.tabBadgeText}>{history.length}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 }
@@ -323,5 +410,58 @@ const styles = StyleSheet.create({
     color: '#4B5563',
     fontSize: 15,
     fontWeight: '600',
-  }
+  },
+  // Tab Bar
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#ffffff',
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    paddingBottom: 20,
+    paddingTop: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 8,
+  },
+  tabItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  tabItemActive: {
+    // active state handled via label color
+  },
+  tabIcon: {
+    fontSize: 22,
+    marginBottom: 2,
+  },
+  tabLabel: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    fontWeight: '500',
+  },
+  tabLabelActive: {
+    color: '#2563EB',
+    fontWeight: '700',
+  },
+  tabBadge: {
+    position: 'absolute',
+    top: -2,
+    right: 28,
+    backgroundColor: '#EF4444',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  tabBadgeText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '800',
+  },
 });

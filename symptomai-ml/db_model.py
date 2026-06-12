@@ -20,6 +20,16 @@ class Medicine(Base):
     efek_samping = Column(Text, nullable=False)
     peringatan = Column(Text, nullable=False)
 
+class DrugInteraction(Base):
+    __tablename__ = "drug_interactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    obat_a = Column(String(255), index=True, nullable=False)
+    obat_b = Column(String(255), index=True, nullable=False)
+    severity = Column(String(50), nullable=False)   # low | medium | high
+    efek = Column(Text, nullable=False)
+    saran = Column(Text, nullable=False)
+
 
 class MedicineInteraction(Base):
     __tablename__ = "medicine_interactions"

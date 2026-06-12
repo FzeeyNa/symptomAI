@@ -2,9 +2,34 @@
 // TYPES
 // ============================================================
 
+export interface TopPrediction {
+  name: string;
+  confidence: string;
+}
+
 export interface AnalysisResult {
   prediction: string;
-  confidence: string; // e.g. "85.50%"
+  confidence: string;
+  top_predictions: TopPrediction[];
+  red_flags: string[];
+  urgency_level: 'normal' | 'waspada' | 'darurat';
+  recommendation: string;
+  key_symptoms_detected: string[];
+}
+
+export interface PredictionHistory {
+  id: string;
+  date: string;
+  prediction: string;
+  confidence: string;
+  urgency_level: 'normal' | 'waspada' | 'darurat';
+  symptoms: string[];
+  result: AnalysisResult;
+}
+
+export interface FeedbackPayload {
+  is_helpful: boolean;
+  note?: string;
 }
 
 export interface MedicineInfo {
