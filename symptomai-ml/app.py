@@ -1,5 +1,9 @@
+import csv
+import hashlib
 import io
 import re
+from datetime import datetime
+from pathlib import Path
 from typing import Dict, List, Optional
 
 import joblib
@@ -8,7 +12,7 @@ from db import Base, engine, get_db
 from db_model import Medicine, DrugInteraction
 from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel
-from sqlalchemy import func, or_
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
 app = FastAPI(
@@ -830,11 +834,11 @@ def check_interactions(
             db.query(DrugInteraction)
             .filter(
                 or_(
-                    (
+                    and_(
                         func.lower(DrugInteraction.obat_a) == name_a.lower(),
                         func.lower(DrugInteraction.obat_b) == name_b.lower(),
                     ),
-                    (
+                    and_(
                         func.lower(DrugInteraction.obat_a) == name_b.lower(),
                         func.lower(DrugInteraction.obat_b) == name_a.lower(),
                     ),
@@ -856,3 +860,85 @@ def check_interactions(
         "total_checked": len(pairs),
         "interactions": found_interactions,
     }
+
+
+# ─── Feedback ──────────────────────────────────────────────────────────────
+FEEDBACK_PREDICT_CSV = Path("feedback_predict.csv")
+FEEDBACK_SCAN_CSV    = Path("feedback_scan.csv")
+
+FEEDBACK_PREDICT_FIELDS = ["timestamp", "result_hash", "prediction", "urgency_level", "is_helpful", "note"]
+FEEDBACK_SCAN_FIELDS    = ["timestamp", "result_hash", "top_match", "is_helpful", "note"]
+
+
+def _ensure_csv(path: Path, fieldnames: list) -> None:
+    """Buat file CSV dengan header jika belum ada."""
+    if not path.exists():
+        with open(path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+
+
+def _make_hash(data: str) -> str:
+    """Buat hash pendek dari string untuk result_id."""
+    return hashlib.md5(data.encode()).hexdigest()[:12]
+
+
+class FeedbackPredictRequest(BaseModel):
+    prediction: str
+    confidence: str
+    urgency_level: str
+    is_helpful: bool
+    note: Optional[str] = None
+
+
+class FeedbackScanRequest(BaseModel):
+    top_match: Optional[str] = None
+    is_helpful: bool
+    note: Optional[str] = None
+
+
+@app.post("/feedback/predict")
+def feedback_predict(request: FeedbackPredictRequest):
+    """
+    Simpan feedback hasil prediksi penyakit ke feedback_predict.csv.
+    """
+    _ensure_csv(FEEDBACK_PREDICT_CSV, FEEDBACK_PREDICT_FIELDS)
+
+    result_hash = _make_hash(f"{request.prediction}{request.confidence}")
+    row = {
+        "timestamp":     datetime.utcnow().isoformat(),
+        "result_hash":   result_hash,
+        "prediction":    request.prediction,
+        "urgency_level": request.urgency_level,
+        "is_helpful":    request.is_helpful,
+        "note":          request.note or "",
+    }
+
+    with open(FEEDBACK_PREDICT_CSV, "a", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=FEEDBACK_PREDICT_FIELDS)
+        writer.writerow(row)
+
+    return {"status": "ok", "message": "Feedback prediksi berhasil disimpan.", "result_hash": result_hash}
+
+
+@app.post("/feedback/scan")
+def feedback_scan(request: FeedbackScanRequest):
+    """
+    Simpan feedback hasil scan obat ke feedback_scan.csv.
+    """
+    _ensure_csv(FEEDBACK_SCAN_CSV, FEEDBACK_SCAN_FIELDS)
+
+    result_hash = _make_hash(f"{request.top_match}{datetime.utcnow().isoformat()}")
+    row = {
+        "timestamp":  datetime.utcnow().isoformat(),
+        "result_hash": result_hash,
+        "top_match":  request.top_match or "",
+        "is_helpful": request.is_helpful,
+        "note":       request.note or "",
+    }
+
+    with open(FEEDBACK_SCAN_CSV, "a", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=FEEDBACK_SCAN_FIELDS)
+        writer.writerow(row)
+
+    return {"status": "ok", "message": "Feedback scan berhasil disimpan.", "result_hash": result_hash}

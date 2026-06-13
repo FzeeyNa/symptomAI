@@ -32,6 +32,26 @@ export interface FeedbackPayload {
   note?: string;
 }
 
+export interface DrugInteraction {
+  pair: [string, string];
+  severity: 'low' | 'medium' | 'high';
+  efek: string;
+  saran: string;
+}
+
+export interface InteractionResult {
+  total_checked: number;
+  interactions: DrugInteraction[];
+}
+
+export interface ScanHistory {
+  id: string;
+  date: string;
+  type: 'predict' | 'scan';
+  summary: string;
+  detail: AnalysisResult | ScanResult;
+}
+
 export interface MedicineInfo {
   id: number;
   nama_obat: string;

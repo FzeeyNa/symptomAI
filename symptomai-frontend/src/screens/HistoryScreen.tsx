@@ -33,7 +33,7 @@ export default function HistoryScreen({
           <Text style={styles.headerTitle}>Riwayat Analisis</Text>
         </View>
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyIcon}>📋</Text>
+          <Text style={styles.emptyIcon}>—</Text>
           <Text style={styles.emptyTitle}>Belum Ada Riwayat</Text>
           <Text style={styles.emptyDesc}>
             Hasil analisis gejala kamu akan tersimpan di sini secara otomatis.
@@ -80,9 +80,9 @@ export default function HistoryScreen({
                 <Text style={styles.dateText}>{item.date}</Text>
 
                 <View style={styles.cardMeta}>
-                  <Text style={styles.confidenceText}>🎯 {item.confidence}</Text>
+                  <Text style={styles.confidenceText}>{item.confidence}</Text>
                   <Text style={styles.symptomsCount}>
-                    🩺 {item.symptoms.length} gejala
+                    {item.symptoms.length} gejala
                   </Text>
                 </View>
 

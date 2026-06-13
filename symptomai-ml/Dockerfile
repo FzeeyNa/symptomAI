@@ -30,7 +30,3 @@ EXPOSE 8000
 
 # Perintah untuk menjalankan FastAPI
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
-az webapp config container set \
-  --name symptomai-api-v2 \
-  --resource-group zeerayzan_rg_4289 \
-  --container-image-name fzeeyna/sympto:v30

@@ -9,21 +9,21 @@ interface ResultCardProps {
 
 const URGENCY_CONFIG = {
   darurat: {
-    label: '🚨 DARURAT',
+    label: 'DARURAT',
     bg: '#FEF2F2',
     border: '#EF4444',
     badge: '#DC2626',
     text: '#7F1D1D',
   },
   waspada: {
-    label: '⚠️ WASPADA',
+    label: 'WASPADA',
     bg: '#FFFBEB',
     border: '#F59E0B',
     badge: '#D97706',
     text: '#78350F',
   },
   normal: {
-    label: '✅ NORMAL',
+    label: 'NORMAL',
     bg: '#F0FDF4',
     border: '#22C55E',
     badge: '#16A34A',
@@ -74,7 +74,7 @@ export default function ResultCard({ result, onFeedback }: ResultCardProps) {
         {/* Top 3 Predictions */}
         {result.top_predictions?.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>📊 Top 3 Kemungkinan Penyakit</Text>
+            <Text style={styles.sectionTitle}>Top 3 Kemungkinan Penyakit</Text>
             {result.top_predictions.map((item, index) => (
               <View key={index} style={styles.topPredictionRow}>
                 <View style={styles.rankBadge}>
@@ -106,7 +106,7 @@ export default function ResultCard({ result, onFeedback }: ResultCardProps) {
             borderColor: urgency.border,
           }]}>
             <Text style={[styles.redFlagTitle, { color: urgency.text }]}>
-              {result.urgency_level === 'darurat' ? '🚨 Peringatan Darurat!' : '⚠️ Perlu Perhatian!'}
+              {result.urgency_level === 'darurat' ? 'Peringatan Darurat!' : 'Perlu Perhatian!'}
             </Text>
             {result.red_flags.map((flag, index) => (
               <View key={index} style={styles.redFlagItem}>
@@ -119,14 +119,14 @@ export default function ResultCard({ result, onFeedback }: ResultCardProps) {
 
         {/* Recommendation */}
         <View style={[styles.section, styles.recommendationBox]}>
-          <Text style={styles.recommendationTitle}>💡 Rekomendasi</Text>
+          <Text style={styles.recommendationTitle}>Rekomendasi</Text>
           <Text style={styles.recommendationText}>{result.recommendation}</Text>
         </View>
 
         {/* Key Symptoms Detected */}
         {result.key_symptoms_detected?.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>🩺 Gejala yang Dirasakan</Text>
+            <Text style={styles.sectionTitle}>Gejala yang Dirasakan</Text>
             <View style={styles.symptomsWrap}>
               {result.key_symptoms_detected.map((sym, index) => (
                 <View key={index} style={styles.symptomTag}>
@@ -140,7 +140,7 @@ export default function ResultCard({ result, onFeedback }: ResultCardProps) {
         {/* Disclaimer */}
         <View style={styles.disclaimerBox}>
           <Text style={styles.disclaimerText}>
-            ⚠️ Ini adalah hasil prediksi Machine Learning, bukan diagnosis medis resmi. Harap konsultasikan ke dokter untuk pemeriksaan yang akurat.
+            Ini adalah hasil prediksi Machine Learning, bukan diagnosis medis resmi. Harap konsultasikan ke dokter untuk pemeriksaan yang akurat.
           </Text>
         </View>
 
@@ -153,18 +153,18 @@ export default function ResultCard({ result, onFeedback }: ResultCardProps) {
                 style={[styles.feedbackBtn, styles.feedbackBtnYes]}
                 onPress={() => handleFeedback(true)}
               >
-                <Text style={styles.feedbackBtnText}>👍  Ya</Text>
+                <Text style={styles.feedbackBtnText}>Ya, Sesuai</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.feedbackBtn, styles.feedbackBtnNo]}
                 onPress={() => handleFeedback(false)}
               >
-                <Text style={styles.feedbackBtnTextNo}>👎  Tidak</Text>
+                <Text style={styles.feedbackBtnTextNo}>Tidak Sesuai</Text>
               </TouchableOpacity>
             </View>
           ) : (
             <Text style={styles.feedbackDone}>
-              {feedbackGiven ? '👍 Terima kasih atas masukan positifnya!' : '👎 Terima kasih, kami akan terus belajar!'}
+              {feedbackGiven ? 'Terima kasih atas masukan positifnya!' : 'Terima kasih, kami akan terus belajar!'}
             </Text>
           )}
         </View>

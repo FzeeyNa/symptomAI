@@ -8,8 +8,9 @@ import {
 } from "react-native";
 import HomeScreen from "./src/screens/HomeScreen";
 import MedicineScanScreen from "./src/screens/MedicineScanScreen";
+import MedicineInteractionScreen from "./src/screens/MedicineInteractionScreen";
 
-type Tab = "home" | "scan";
+type Tab = "home" | "scan" | "interaction";
 
 const TAB_BAR_HEIGHT = 60;
 const TAB_BAR_BOTTOM_PAD = Platform.OS === "ios" ? 24 : 8;
@@ -42,11 +43,19 @@ function TabItem({ icon, label, active, onPress }: TabItemProps) {
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>("home");
 
+  const renderScreen = () => {
+    switch (activeTab) {
+      case "home":        return <HomeScreen />;
+      case "scan":        return <MedicineScanScreen />;
+      case "interaction": return <MedicineInteractionScreen />;
+    }
+  };
+
   return (
     <View style={styles.root}>
       {/* Screen area */}
       <View style={styles.screenArea}>
-        {activeTab === "home" ? <HomeScreen /> : <MedicineScanScreen />}
+        {renderScreen()}
       </View>
 
       {/* Tab Bar */}
@@ -62,6 +71,12 @@ export default function App() {
           label="Scan Obat"
           active={activeTab === "scan"}
           onPress={() => setActiveTab("scan")}
+        />
+        <TabItem
+          icon="🔍"
+          label="Interaksi"
+          active={activeTab === "interaction"}
+          onPress={() => setActiveTab("interaction")}
         />
       </View>
     </View>
